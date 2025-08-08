@@ -1,0 +1,86 @@
+# Environment variables and secrets
+.env
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+storage/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are created by PyInstaller.
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDE / Editor specific files
+.idea/
+*.swp
+*~
+*.bak
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
+# AI / ML Data and Models
+# Large data files, models, or vector stores should not be in git.
+# Adjust these patterns to match your project.
+*.pkl
+*.joblib
+*.h5
+*.model
+vectorstore.faiss
+index.faiss
+/data/
+/models/
+chat_history.db
