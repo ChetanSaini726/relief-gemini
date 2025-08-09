@@ -5,8 +5,8 @@ from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
-    if not DATABASE_URL:
-        raise ValueError("DATABASE_URL environment variable is not set")
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is not set")
 
 _engine: Optional[AsyncEngine] = None
 _db_initialized = False
@@ -40,3 +40,4 @@ async def init_db():
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         raise
+
