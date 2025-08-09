@@ -4,7 +4,8 @@ import streamlit as st
 import PyPDF2
 import asyncio
 from datasets import load_dataset
-from src.core.db import init_db, save_message, load_history, create_new_session, get_all_sessions
+from src.core.db import init_db
+from src.core.crud import save_message, load_history, create_new_session, get_all_sessions
 from src.core.gemini_api import generate_gemini_response
 import uuid
 from datetime import datetime
