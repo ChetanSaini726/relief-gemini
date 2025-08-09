@@ -3,7 +3,6 @@ google-genai==1.29.0
 anyio==4.10.0
 sqlmodel==0.0.24
 PyMuPDF==1.24.7
-python-dotenv==1.1.1
 cryptography==45.0.6
 datasets==4.0.0
 sqlalchemy[asyncio]==2.0.42
