@@ -2,13 +2,12 @@ import os
 import base64
 import logging
 from typing import Optional, List, Tuple
-import streamlit as st
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from .models import ChatSession, ChatMessage
-from .db import get_engine, init_db
+from .db import get_engine
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,7 @@ def get_encryption_key() -> bytes:
         if not key_b64:
             raise ValueError("CHAT_DB_KEY environment variable is not set")
         key = base64.urlsafe_b64decode(key_b64)
-        if len(key) not in [16, 24, 32]:
+        if len(key) not in [32]:
             raise ValueError("Invalid AES key length")
         return key
     except Exception as e:
@@ -58,7 +57,6 @@ def decrypt(cipherbytes: bytes) -> str:
 # CRUD Operations
 # ------------------------------------------------------------------------------
 async def create_new_session(session_id: str, session_name: str):
-    await init_db()
     engine = get_engine()
     async with AsyncSession(engine) as db_session:
         if await db_session.get(ChatSession, session_id):
@@ -68,7 +66,6 @@ async def create_new_session(session_id: str, session_name: str):
         await db_session.commit()
 
 async def get_all_sessions() -> List[ChatSession]:
-    await init_db()
     engine = get_engine()
     async with AsyncSession(engine) as session:
         result = await session.execute(
@@ -81,7 +78,6 @@ async def save_message(session_id: str, role: str, content: str):
         raise ValueError("session_id, role, and content are required")
     if role not in ["user", "assistant"]:
         raise ValueError("role must be 'user' or 'assistant'")
-    await init_db()
     engine = get_engine()
     encrypted_content = encrypt(content)
     async with AsyncSession(engine) as session:
@@ -93,7 +89,6 @@ async def save_message(session_id: str, role: str, content: str):
 async def load_history(session_id: str) -> List[Tuple[str, str]]:
     if not session_id:
         return []
-    await init_db()
     engine = get_engine()
     async with AsyncSession(engine) as session:
         if not await session.get(ChatSession, session_id):
@@ -109,7 +104,6 @@ async def load_history(session_id: str) -> List[Tuple[str, str]]:
 async def delete_session(session_id: str):
     if not session_id:
         raise ValueError("session_id is required")
-    await init_db()
     engine = get_engine()
     async with AsyncSession(engine) as session:
         existing_session = await session.get(ChatSession, session_id)
@@ -120,13 +114,11 @@ async def delete_session(session_id: str):
 async def get_session_by_id(session_id: str) -> Optional[ChatSession]:
     if not session_id:
         return None
-    await init_db()
     engine = get_engine()
     async with AsyncSession(engine) as session:
         return await session.get(ChatSession, session_id)
 
 async def cleanup_empty_sessions():
-    await init_db()
     engine = get_engine()
     async with AsyncSession(engine) as session:
         all_sessions = await session.execute(select(ChatSession))
@@ -142,7 +134,6 @@ async def cleanup_empty_sessions():
             await delete_session(empty_id)
 
 async def get_database_stats():
-    await init_db()
     engine = get_engine()
     async with AsyncSession(engine) as session:
         session_count = await session.execute(select(ChatSession))
