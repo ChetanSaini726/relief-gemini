@@ -305,3 +305,40 @@ async def generate_rate_limited_response(prompt: str) -> AsyncGenerator[str, Non
         yield f"❌ Error: {str(e)}"
 
 
+async def generate_session_title(prompt: str) -> str:
+    return " ".join(prompt.split()[:5]) + "..."
+#     """Generate a concise session title from the user's first prompt."""
+#     try:
+#         client = await get_async_client()
+        
+#         title_prompt = f"""Summarize the following user query into a concise title of no more than 16 words. 
+# The title should capture the main topic of the query. Do not add quotes, asterisks, or any other formatting.
+
+# Query: "{prompt}"
+
+# Title:"""
+
+#         config = types.GenerateContentConfig(
+#             temperature=0.2,
+#             max_output_tokens=40,
+#             stop_sequences=["\n"]
+#         )
+
+#         response = await client.models.generate_content(
+#             model=MODEL_NAME,
+#             contents=[types.Content(role="user", parts=[types.Part(text=title_prompt)])],
+#             config=config,
+#         )
+        
+#         if response and response.text:
+#             title = response.text.strip().strip('"').strip('*').strip()
+#             words = title.split()
+#             if len(words) > 16:
+#                 title = " ".join(words[:16]) + "..."
+#             return title if title else " ".join(prompt.split()[:5]) + "..."
+#         else:
+#             return " ".join(prompt.split()[:5]) + "..."
+
+#     except Exception as e:
+#         logger.error(f"Failed to generate session title: {e}")
+#         return " ".join(prompt.split()[:5]) + "..."
