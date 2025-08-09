@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from typing import Optional
 from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
@@ -10,6 +11,7 @@ if not DATABASE_URL:
 
 _engine: Optional[AsyncEngine] = None
 _db_initialized = False
+_init_lock = asyncio.Lock()
 logger = logging.getLogger(__name__)
 
 def get_engine() -> AsyncEngine:
@@ -25,19 +27,21 @@ def get_engine() -> AsyncEngine:
     return _engine
 
 async def init_db():
-    """Initialize database tables once"""
+    """Initialize database tables once, in a thread-safe and async-safe way."""
     global _db_initialized
     if _db_initialized:
         return
-    try:
-        engine = get_engine()
-        async with engine.begin() as conn:
-            # Import models here to ensure they are registered before create_all
-            from .models import ChatSession, ChatMessage
-            await conn.run_sync(SQLModel.metadata.create_all)
-        _db_initialized = True
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-        raise
 
+    async with _init_lock:
+        # Double-check after acquiring the lock to prevent redundant work
+        if _db_initialized:
+            return
+        try:
+            engine = get_engine()
+            async with engine.begin() as conn:
+                await conn.run_sync(SQLModel.metadata.create_all)
+            _db_initialized = True
+            logger.info("Database initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize database: {e}")
+            raise
