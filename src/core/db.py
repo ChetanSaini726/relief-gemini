@@ -1,11 +1,10 @@
-import os
 import logging
 import asyncio
 from typing import Optional
 from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = st.secrets.get("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable is not set")
 
@@ -45,3 +44,4 @@ async def init_db():
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
             raise
+
