@@ -1,18 +1,23 @@
 import os
-import streamlit as st
 import base64
+import logging
 from datetime import datetime
+from typing import Optional, List, Tuple
+
+import streamlit as st
 from sqlmodel import Field, SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from typing import Optional, List, Tuple
-import logging
 
-# Configure logging
+# ------------------------------------------------------------------------------
+# Logging
+# ------------------------------------------------------------------------------
 logger = logging.getLogger(__name__)
 
-# Load encryption key with error handling
+# ------------------------------------------------------------------------------
+# Encryption Key Handling
+# ------------------------------------------------------------------------------
 def get_encryption_key() -> bytes:
     """Get encryption key from environment with validation"""
     try:
@@ -21,7 +26,7 @@ def get_encryption_key() -> bytes:
             raise ValueError("CHAT_DB_KEY environment variable is not set")
         
         key = base64.urlsafe_b64decode(key_b64)
-        if len(key) not in [16, 24, 32]:  # Valid AES key lengths
+        if len(key) not in [16, 24, 32]:
             raise ValueError("Invalid AES key length")
         
         return key
@@ -31,6 +36,9 @@ def get_encryption_key() -> bytes:
 
 AES_KEY = get_encryption_key()
 
+# ------------------------------------------------------------------------------
+# Models
+# ------------------------------------------------------------------------------
 class ChatSession(SQLModel, table=True):
     """Chat session model"""
     id: str = Field(primary_key=True)
@@ -45,257 +53,81 @@ class ChatMessage(SQLModel, table=True):
     role: str
     content: bytes  # encrypted blob
 
-# Database setup
+# ------------------------------------------------------------------------------
+# Database Setup
+# ------------------------------------------------------------------------------
 DATABASE_URL = "sqlite+aiosqlite:///chat_history.db"
-engine: Optional[AsyncEngine] = None
+_engine: Optional[AsyncEngine] = None
 
 def get_engine() -> AsyncEngine:
     """Get or create database engine"""
-    global engine
-    if engine is None:
-        engine = create_async_engine(
+    global _engine
+    if _engine is None:
+        _engine = create_async_engine(
             DATABASE_URL, 
             echo=False,
             pool_pre_ping=True,
             pool_recycle=3600
         )
-    return engine
+    return _engine
+
+_db_initialized = False
 
 async def init_db():
-    """Initialize database with proper error handling"""
+    """Initialize database once"""
+    global _db_initialized
+    if _db_initialized:
+        return
     try:
         engine = get_engine()
         async with engine.begin() as conn:
             await conn.run_sync(SQLModel.metadata.create_all)
+        _db_initialized = True
         logger.info("Database initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         raise
 
+# ------------------------------------------------------------------------------
+# Encryption Helpers
+# ------------------------------------------------------------------------------
 def encrypt(plaintext: str) -> bytes:
-    """Encrypt plaintext with error handling"""
+    """Encrypt plaintext with AES-GCM"""
     try:
         if not plaintext:
             return b""
-        
         aesgcm = AESGCM(AES_KEY)
-        nonce = os.urandom(12)  # 12-byte nonce for AES-GCM
-        ciphertext = aesgcm.encrypt(nonce, plaintext.encode('utf-8'), None)
+        nonce = os.urandom(12)
+        ciphertext = aesgcm.encrypt(nonce, plaintext.encode("utf-8"), None)
         return nonce + ciphertext
     except Exception as e:
         logger.error(f"Encryption failed: {e}")
         raise
 
 def decrypt(cipherbytes: bytes) -> str:
-    """Decrypt ciphertext with error handling"""
+    """Decrypt ciphertext with AES-GCM"""
     try:
         if not cipherbytes:
             return ""
-            
         if len(cipherbytes) < 12:
             raise ValueError("Invalid ciphertext length")
-            
         aesgcm = AESGCM(AES_KEY)
         nonce, ciphertext = cipherbytes[:12], cipherbytes[12:]
-        plaintext = aesgcm.decrypt(nonce, ciphertext, None).decode('utf-8')
-        return plaintext
+        return aesgcm.decrypt(nonce, ciphertext, None).decode("utf-8")
     except Exception as e:
         logger.error(f"Decryption failed: {e}")
         return "[Decryption error - message corrupted]"
 
+# ------------------------------------------------------------------------------
+# Database CRUD Operations
+# ------------------------------------------------------------------------------
 async def create_new_session(session_id: str, session_name: str):
     """Create a new chat session"""
     try:
+        await init_db()
         engine = get_engine()
-        session = ChatSession(id=session_id, name=session_name)
-        
         async with AsyncSession(engine) as db_session:
-            # Check if session already exists
             existing = await db_session.get(ChatSession, session_id)
             if existing:
                 logger.warning(f"Session {session_id} already exists")
                 return
-                
-            db_session.add(session)
-            await db_session.commit()
-        logger.info(f"Created new session: {session_name} ({session_id})")
-    except Exception as e:
-        logger.error(f"Failed to create session: {e}")
-        raise
-
-async def get_all_sessions() -> List[ChatSession]:
-    """Get all chat sessions ordered by creation date"""
-    try:
-        engine = get_engine()
-        async with AsyncSession(engine) as session:
-            result = await session.execute(
-                select(ChatSession).order_by(ChatSession.created_at.desc())
-            )
-            sessions = result.scalars().all()
-        return list(sessions)
-    except Exception as e:
-        logger.error(f"Failed to load sessions: {e}")
-        return []
-
-async def save_message(session_id: str, role: str, content: str):
-    """Save a message to the database"""
-    try:
-        if not session_id or not role or not content:
-            raise ValueError("session_id, role, and content are required")
-            
-        if role not in ["user", "assistant"]:
-            raise ValueError("role must be 'user' or 'assistant'")
-        
-        engine = get_engine()
-        encrypted_content = encrypt(content)
-        message = ChatMessage(
-            session_id=session_id,
-            role=role,
-            content=encrypted_content
-        )
-        
-        async with AsyncSession(engine) as session:
-            # Verify session exists
-            existing_session = await session.get(ChatSession, session_id)
-            if not existing_session:
-                raise ValueError(f"Session {session_id} does not exist")
-                
-            session.add(message)
-            await session.commit()
-            
-        logger.info(f"Saved {role} message to session {session_id}")
-    except Exception as e:
-        logger.error(f"Failed to save message: {e}")
-        if hasattr(st, 'error'):
-            st.error(f"❌ Failed to save message: {e}")
-        raise
-
-async def load_history(session_id: str) -> List[Tuple[str, str]]:
-    """Load chat history for a specific session"""
-    try:
-        if not session_id:
-            return []
-            
-        engine = get_engine()
-        async with AsyncSession(engine) as session:
-            # Verify session exists
-            existing_session = await session.get(ChatSession, session_id)
-            if not existing_session:
-                logger.warning(f"Session {session_id} does not exist")
-                return []
-            
-            # Load messages for this session
-            result = await session.execute(
-                select(ChatMessage)
-                .where(ChatMessage.session_id == session_id)
-                .order_by(ChatMessage.id)
-            )
-            messages = result.scalars().all()
-        
-        # Decrypt and return messages
-        history = []
-        for msg in messages:
-            try:
-                decrypted_content = decrypt(msg.content)
-                history.append((msg.role, decrypted_content))
-            except Exception as e:
-                logger.error(f"Failed to decrypt message {msg.id}: {e}")
-                history.append((msg.role, "[Message could not be decrypted]"))
-                
-        logger.info(f"Loaded {len(history)} messages for session {session_id}")
-        return history
-        
-    except Exception as e:
-        logger.error(f"Failed to load history for session {session_id}: {e}")
-        if hasattr(st, 'error'):
-            st.error(f"❌ Failed to load chat history: {e}")
-        return []
-
-async def delete_session(session_id: str):
-    """Delete a chat session and all its messages"""
-    try:
-        if not session_id:
-            raise ValueError("session_id is required")
-            
-        engine = get_engine()
-        async with AsyncSession(engine) as session:
-            # Delete all messages in the session
-            await session.execute(
-                select(ChatMessage).where(ChatMessage.session_id == session_id)
-            )
-            
-            # Delete the session
-            existing_session = await session.get(ChatSession, session_id)
-            if existing_session:
-                await session.delete(existing_session)
-                await session.commit()
-                logger.info(f"Deleted session {session_id}")
-            else:
-                logger.warning(f"Session {session_id} not found for deletion")
-                
-    except Exception as e:
-        logger.error(f"Failed to delete session {session_id}: {e}")
-        raise
-
-async def get_session_by_id(session_id: str) -> Optional[ChatSession]:
-    """Get a specific session by ID"""
-    try:
-        if not session_id:
-            return None
-            
-        engine = get_engine()
-        async with AsyncSession(engine) as session:
-            result = await session.get(ChatSession, session_id)
-        return result
-    except Exception as e:
-        logger.error(f"Failed to get session {session_id}: {e}")
-        return None
-
-# Utility functions for database maintenance
-async def cleanup_empty_sessions():
-    """Remove sessions with no messages"""
-    try:
-        engine = get_engine()
-        async with AsyncSession(engine) as session:
-            # Get all sessions
-            all_sessions = await session.execute(select(ChatSession))
-            sessions = all_sessions.scalars().all()
-            
-            # Check each session for messages
-            empty_sessions = []
-            for chat_session in sessions:
-                messages = await session.execute(
-                    select(ChatMessage).where(ChatMessage.session_id == chat_session.id)
-                )
-                if not messages.scalars().first():
-                    empty_sessions.append(chat_session.id)
-            
-            # Delete empty sessions
-            for empty_id in empty_sessions:
-                await delete_session(empty_id)
-                
-            logger.info(f"Cleaned up {len(empty_sessions)} empty sessions")
-            
-    except Exception as e:
-        logger.error(f"Failed to cleanup empty sessions: {e}")
-
-async def get_database_stats():
-    """Get database statistics"""
-    try:
-        engine = get_engine()
-        async with AsyncSession(engine) as session:
-            # Count sessions
-            session_count = await session.execute(select(ChatSession))
-            total_sessions = len(session_count.scalars().all())
-            
-            # Count messages
-            message_count = await session.execute(select(ChatMessage))
-            total_messages = len(message_count.scalars().all())
-            
-        return {
-            "total_sessions": total_sessions,
-            "total_messages": total_messages
-        }
-    except Exception as e:
-        logger.error(f"Failed to get database stats: {e}")
-        return {"total_sessions": 0, "total_messages": 0}
