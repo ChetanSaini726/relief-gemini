@@ -14,6 +14,7 @@ from src.core.gemini_api import generate_context_aware_response, generate_sessio
 import uuid
 import logging
 
+logger = logging.getLogger(__name__)
 
 def setup_environment():
     """Setup environment variables with error handling"""
@@ -49,7 +50,6 @@ def setup_logging():
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.WARNING)
-    logger = logging.getLogger(__name__)
     
 setup_environment()
 setup_logging()
@@ -366,4 +366,5 @@ st.markdown(
     "*🤖 Powered by Gemini AI | Built for emergency response teams*",
     help="This AI assistant provides information based on disaster response datasets and uploaded documents.",
 )
+
 
