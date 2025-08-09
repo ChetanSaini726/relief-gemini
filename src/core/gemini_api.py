@@ -1,7 +1,7 @@
-import os
 import time
 import logging
 import asyncio
+import streamlit as st
 from typing import AsyncGenerator, Optional
 from google.genai import types
 from google.genai.errors import ClientError, ServerError
@@ -11,7 +11,7 @@ from google import genai
 logger = logging.getLogger(__name__)
 
 # Configuration
-MODEL_NAME = os.environ.get("AI_AGENT") # Updated to latest model
+MODEL_NAME = st.secrets.get("AI_AGENT") # Updated to latest model
 if not MODEL_NAME:
     raise ValueError("AI_AGENT environment is not set")
 SYSTEM_PROMPT = """You are DisasterReliefAI, an intelligent assistant specialized in emergency response and disaster management.
@@ -44,7 +44,7 @@ async def get_async_client():
         return _async_client
     
     try:
-        api_key = os.environ.get("GEMINI_API_KEY")
+        api_key = st.secrets.get("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable is not set")
         
@@ -342,3 +342,4 @@ async def generate_session_title(prompt: str) -> str:
 #     except Exception as e:
 #         logger.error(f"Failed to generate session title: {e}")
 #         return " ".join(prompt.split()[:5]) + "..."
+
