@@ -1,6 +1,6 @@
-import st
 import logging
 import asyncio
+import streamlit as st
 from typing import Optional
 from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
@@ -45,5 +45,6 @@ async def init_db():
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
             raise
+
 
 
