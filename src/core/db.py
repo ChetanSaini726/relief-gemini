@@ -1,3 +1,4 @@
+import st
 import logging
 import asyncio
 from typing import Optional
@@ -44,4 +45,5 @@ async def init_db():
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
             raise
+
 
