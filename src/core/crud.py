@@ -4,6 +4,7 @@ import logging
 from typing import Optional, List, Tuple
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from sqlmodel import select
+from sqlalchemy import func
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from .models import ChatSession, ChatMessage
@@ -68,10 +69,10 @@ async def create_new_session(session_id: str, session_name: str):
 async def get_all_sessions() -> List[ChatSession]:
     engine = get_engine()
     async with AsyncSession(engine) as session:
-        result = await session.execute(
+        results = await session.exec(
             select(ChatSession).order_by(ChatSession.created_at.desc())
         )
-        return list(result.scalars().all())
+        return list(results.all())
 
 async def save_message(session_id: str, role: str, content: str):
     if not session_id or not role or not content:
@@ -93,13 +94,14 @@ async def load_history(session_id: str) -> List[Tuple[str, str]]:
     async with AsyncSession(engine) as session:
         if not await session.get(ChatSession, session_id):
             return []
-        result = await session.execute(
-            select(ChatMessage)
+        statement = (
+            select(ChatMessage.role, ChatMessage.content)
             .where(ChatMessage.session_id == session_id)
             .order_by(ChatMessage.id)
         )
-        messages = result.scalars().all()
-    return [(msg.role, decrypt(msg.content)) for msg in messages]
+        results = await session.exec(statement)
+        encrypted_history = results.all()
+    return [(role, decrypt(content)) for role, content in encrypted_history]
 
 async def delete_session(session_id: str):
     if not session_id:
@@ -120,26 +122,29 @@ async def get_session_by_id(session_id: str) -> Optional[ChatSession]:
 
 async def cleanup_empty_sessions():
     engine = get_engine()
+    # More efficient: Use a subquery to find sessions with no messages
     async with AsyncSession(engine) as session:
-        all_sessions = await session.execute(select(ChatSession))
-        sessions = all_sessions.scalars().all()
-        empty_sessions = []
-        for chat_session in sessions:
-            messages = await session.execute(
-                select(ChatMessage).where(ChatMessage.session_id == chat_session.id)
-            )
-            if not messages.scalars().first():
-                empty_sessions.append(chat_session.id)
-        for empty_id in empty_sessions:
-            await delete_session(empty_id)
+        subquery = select(ChatMessage.session_id).distinct().subquery()
+        query = select(ChatSession).where(ChatSession.id.notin_(select(subquery)))
+        
+        empty_sessions_results = await session.exec(query)
+        empty_sessions = empty_sessions_results.scalars().all()
+        
+        for s in empty_sessions:
+            await session.delete(s)
+        
+        if empty_sessions:
+            await session.commit()
+            logger.info(f"Cleaned up {len(empty_sessions)} empty sessions.")
 
 async def get_database_stats():
     engine = get_engine()
+    # More efficient: Use func.count to count in the DB instead of loading all objects
     async with AsyncSession(engine) as session:
-        session_count = await session.execute(select(ChatSession))
-        total_sessions = len(session_count.scalars().all())
-        message_count = await session.execute(select(ChatMessage))
-        total_messages = len(message_count.scalars().all())
+        session_count_result = await session.exec(select(func.count(ChatSession.id)))
+        message_count_result = await session.exec(select(func.count(ChatMessage.id)))
+        total_sessions = session_count_result.scalar_one()
+        total_messages = message_count_result.scalar_one()
     return {
         "total_sessions": total_sessions,
         "total_messages": total_messages
