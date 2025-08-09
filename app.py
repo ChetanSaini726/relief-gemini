@@ -1,5 +1,3 @@
-import os
-from dotenv import load_dotenv
 import streamlit as st
 import fitz  # PyMuPDF
 import asyncio
@@ -16,10 +14,45 @@ from src.core.gemini_api import generate_context_aware_response, generate_sessio
 import uuid
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
+def setup_environment():
+    """Setup environment variables with error handling"""
+    try:
+        # Validate required keys
+        if not st.secrets.get("CHAT_DB_KEY"):
+            st.error(
+                "❌ CHAT_DB_KEY is required but not found in environment variables"
+            )
+            st.stop()
+        if not st.secrets.get("GEMINI_API_KEY"):
+            st.error(
+                "❌ GEMINI_API_KEY is required but not found in environment variables"
+            )
+            st.stop()
+        if not st.secrets.get("ENVIRONMENT"):
+            "ENVIRONMENT", st.secrets.get("ENVIRONMENT", "prod")
+            st.warning(
+                "⚠️ ENVIRONMENT is required but not found in environment variables, set to production environment"
+            )
+    except Exception as e:
+        st.error("❌ Error setting up environment")
+        logger.error(f"Environment setup error: {e}")
+        st.stop()
+
+def setup_logging():
+    """Setup logging configuration based on the environment"""
+    if st.secrets.get("ENVIRONMENT") == "prod":
+        logging.basicConfig(level=logging.WARNING)
+    elif st.secrets.get("ENVIRONMENT") == "release":
+        logging.basicConfig(level=logging.INFO)
+    elif st.secrets.get("ENVIRONMENT") == "debug":
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.WARNING)
+    logger = logging.getLogger(__name__)
+    
+setup_environment()
+setup_logging()
 
 # --- Asyncio Event Loop Management ---
 def get_or_create_eventloop():
@@ -35,42 +68,6 @@ def get_or_create_eventloop():
 def run_async(coro):
     """Runs an async coroutine in the thread's event loop."""
     return get_or_create_eventloop().run_until_complete(coro)
-
-
-# Load env
-load_dotenv()
-
-
-def setup_environment():
-    """Setup environment variables with error handling"""
-    try:
-        # Try to get from secrets first, then fallback to env
-        if hasattr(st, "secrets") and st.secrets:
-            os.environ.setdefault("CHAT_DB_KEY", st.secrets.get("CHAT_DB_KEY", ""))
-            os.environ.setdefault(
-                "GEMINI_API_KEY", st.secrets.get("GEMINI_API_KEY", "")
-            )
-
-        # Validate required keys
-        if not os.environ.get("CHAT_DB_KEY"):
-            st.error(
-                "❌ CHAT_DB_KEY is required but not found in environment variables or Streamlit secrets"
-            )
-            st.stop()
-        if not os.environ.get("GEMINI_API_KEY"):
-            st.error(
-                "❌ GEMINI_API_KEY is required but not found in environment variables or Streamlit secrets"
-            )
-            st.stop()
-
-    except Exception as e:
-        st.error("❌ Error setting up environment")
-        logger.error(f"Environment setup error: {e}")
-        st.stop()
-
-
-setup_environment()
-
 
 # Preload dataset with error handling
 @st.cache_data(show_spinner="Loading disaster response dataset...")
@@ -369,3 +366,4 @@ st.markdown(
     "*🤖 Powered by Gemini AI | Built for emergency response teams*",
     help="This AI assistant provides information based on disaster response datasets and uploaded documents.",
 )
+
