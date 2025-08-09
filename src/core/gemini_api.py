@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 MODEL_NAME = os.environ.get("AI_AGENT") # Updated to latest model
-if not DATABASE_URL:
+if not MODEL_NAME:
     raise ValueError("AI_AGENT environment is not set")
 SYSTEM_PROMPT = """You are DisasterReliefAI, an intelligent assistant specialized in emergency response and disaster management.
 
@@ -303,4 +303,5 @@ async def generate_rate_limited_response(prompt: str) -> AsyncGenerator[str, Non
         logger.error(f"Rate limited generation error: {e}")
 
         yield f"❌ Error: {str(e)}"
+
 
