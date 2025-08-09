@@ -49,7 +49,7 @@ def setup_environment():
             st.stop()
             
     except Exception as e:
-        st.error(f"❌ Error setting up environment: {e}")
+        st.error(f"❌ Error setting up environment")
         st.stop()
 
 setup_environment()
@@ -91,7 +91,7 @@ def create_new_chat_session():
         st.session_state.sessions.append({'id': session_id, 'name': session_name})
         st.rerun()
     except Exception as e:
-        st.error(f"❌ Failed to create new chat session: {e}")
+        st.error(f"❌ Failed to create new chat session")
 
 async def load_chat_sessions():
     """Load all chat sessions"""
@@ -101,7 +101,7 @@ async def load_chat_sessions():
         if sessions and not st.session_state.current_session_id:
             st.session_state.current_session_id = sessions[0].id
     except Exception as e:
-        st.error(f"❌ Failed to load chat sessions: {e}")
+        st.error(f"❌ Failed to load chat sessions")
 
 def process_uploaded_files(uploaded_files):
     """Process uploaded files and extract text"""
@@ -131,7 +131,7 @@ def process_uploaded_files(uploaded_files):
                     st.warning(f"⚠️ No text could be extracted from {file.name}")
                     
         except Exception as e:
-            st.error(f"❌ Error processing file {file.name}: {e}")
+            st.error(f"❌ Error processing file {file.name}")
             
     return user_context
 
@@ -167,8 +167,7 @@ User question: {prompt}"""
         return full_response
         
     except Exception as e:
-        error_msg = f"❌ Error generating response: {str(e)}"
-        st.error(error_msg)
+        st.error(f"❌ Error generating response")
         logger.error(f"Chat response error: {e}")
         return error_msg
 
@@ -186,7 +185,7 @@ async def main():
         await load_chat_sessions()
         
     except Exception as e:
-        st.error(f"❌ Failed to initialize application: {e}")
+        st.error(f"❌ Failed to initialize application")
         st.stop()
 
 # Streamlit UI
@@ -200,7 +199,7 @@ st.set_page_config(
 try:
     run_async(main())
 except Exception as e:
-    st.error(f"❌ Application initialization failed: {e}")
+    st.error(f"❌ Application initialization failed")
     st.stop()
 
 # Load context data once using cache
@@ -276,7 +275,7 @@ else:
                 st.markdown(message)
                 
     except Exception as e:
-        st.error(f"❌ Failed to load chat history: {e}")
+        st.error(f"❌ Failed to load chat history")
         history = []
     
     # Chat input
@@ -299,7 +298,7 @@ else:
                 ))
             
         except Exception as e:
-            st.error(f"❌ Failed to process message: {e}")
+            st.error(f"❌ Failed to process message")
             logger.error(f"Message processing error: {e}")
 
 # Footer
@@ -308,3 +307,4 @@ st.markdown(
     "*🤖 Powered by Gemini AI | Built for emergency response teams*",
     help="This AI assistant provides information based on disaster response datasets and uploaded documents."
 )
+
