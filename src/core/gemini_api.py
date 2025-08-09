@@ -10,7 +10,7 @@ from google import genai
 logger = logging.getLogger(__name__)
 
 # Configuration
-MODEL_NAME = "gemini-2.5-flash"  # Updated to latest model
+MODEL_NAME = "gemini-2.0-flash"  # Updated to latest model
 SYSTEM_PROMPT = """You are DisasterReliefAI, an intelligent assistant specialized in emergency response and disaster management.
 
 Your responsibilities:
