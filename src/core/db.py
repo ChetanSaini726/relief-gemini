@@ -57,7 +57,7 @@ class ChatMessage(SQLModel, table=True):
 # Database Setup
 # ------------------------------------------------------------------------------
 try:
-    global DATABASE_URL = os.environ.get("DATABASE_URL")
+    DATABASE_URL = os.environ.get("DATABASE_URL")
     if not DATABASE_URL:
         raise ValueError("DATABASE_URL environment is not set")
 except Exception as e:
@@ -281,3 +281,4 @@ async def get_database_stats():
     except Exception as e:
         logger.error(f"Failed to get database stats: {e}")
         return {"total_sessions": 0, "total_messages": 0}
+
