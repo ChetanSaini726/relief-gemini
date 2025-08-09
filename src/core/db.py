@@ -56,7 +56,14 @@ class ChatMessage(SQLModel, table=True):
 # ------------------------------------------------------------------------------
 # Database Setup
 # ------------------------------------------------------------------------------
-DATABASE_URL = "sqlite+aiosqlite:///chat_history.db"
+try:
+    global DATABASE_URL = os.environ.get("DATABASE_URL")
+    if not DATABASE_URL:
+        raise ValueError("DATABASE_URL environment is not set")
+except Exception as e:
+    logger.error(f"Failed to load database url: {e}")
+    raise
+
 _engine: Optional[AsyncEngine] = None
 
 def get_engine() -> AsyncEngine:
@@ -131,3 +138,146 @@ async def create_new_session(session_id: str, session_name: str):
             if existing:
                 logger.warning(f"Session {session_id} already exists")
                 return
+            db_session.add(ChatSession(id=session_id, name=session_name))
+            await db_session.commit()
+        logger.info(f"Created new session: {session_name} ({session_id})")
+    except Exception as e:
+        logger.error(f"Failed to create session: {e}")
+        raise
+
+async def get_all_sessions() -> List[ChatSession]:
+    """Get all chat sessions ordered by creation date"""
+    try:
+        await init_db()
+        engine = get_engine()
+        async with AsyncSession(engine) as session:
+            result = await session.execute(
+                select(ChatSession).order_by(ChatSession.created_at.desc())
+            )
+            return list(result.scalars().all())
+    except Exception as e:
+        logger.error(f"Failed to load sessions: {e}")
+        return []
+
+async def save_message(session_id: str, role: str, content: str):
+    """Save a message to the database"""
+    try:
+        if not session_id or not role or not content:
+            raise ValueError("session_id, role, and content are required")
+        if role not in ["user", "assistant"]:
+            raise ValueError("role must be 'user' or 'assistant'")
+        
+        await init_db()
+        engine = get_engine()
+        encrypted_content = encrypt(content)
+        message = ChatMessage(session_id=session_id, role=role, content=encrypted_content)
+        
+        async with AsyncSession(engine) as session:
+            if not await session.get(ChatSession, session_id):
+                raise ValueError(f"Session {session_id} does not exist")
+            session.add(message)
+            await session.commit()
+        logger.info(f"Saved {role} message to session {session_id}")
+    except Exception as e:
+        logger.error(f"Failed to save message: {e}")
+        if hasattr(st, "error"):
+            st.error(f"❌ Failed to save message")
+        raise
+
+async def load_history(session_id: str) -> List[Tuple[str, str]]:
+    """Load chat history for a specific session"""
+    try:
+        if not session_id:
+            return []
+        await init_db()
+        engine = get_engine()
+        async with AsyncSession(engine) as session:
+            if not await session.get(ChatSession, session_id):
+                logger.warning(f"Session {session_id} does not exist")
+                return []
+            result = await session.execute(
+                select(ChatMessage)
+                .where(ChatMessage.session_id == session_id)
+                .order_by(ChatMessage.id)
+            )
+            messages = result.scalars().all()
+        return [(msg.role, decrypt(msg.content)) for msg in messages]
+    except Exception as e:
+        logger.error(f"Failed to load history for session {session_id}: {e}")
+        if hasattr(st, "error"):
+            st.error(f"❌ Failed to load chat history")
+        return []
+
+async def delete_session(session_id: str):
+    """Delete a chat session and all its messages"""
+    try:
+        if not session_id:
+            raise ValueError("session_id is required")
+        await init_db()
+        engine = get_engine()
+        async with AsyncSession(engine) as session:
+            existing_session = await session.get(ChatSession, session_id)
+            if existing_session:
+                await session.delete(existing_session)
+                await session.commit()
+                logger.info(f"Deleted session {session_id}")
+            else:
+                logger.warning(f"Session {session_id} not found for deletion")
+    except Exception as e:
+        logger.error(f"Failed to delete session {session_id}: {e}")
+        raise
+
+async def get_session_by_id(session_id: str) -> Optional[ChatSession]:
+    """Get a specific session by ID"""
+    try:
+        if not session_id:
+            return None
+        await init_db()
+        engine = get_engine()
+        async with AsyncSession(engine) as session:
+            return await session.get(ChatSession, session_id)
+    except Exception as e:
+        logger.error(f"Failed to get session {session_id}: {e}")
+        return None
+
+# ------------------------------------------------------------------------------
+# Utility Functions
+# ------------------------------------------------------------------------------
+async def cleanup_empty_sessions():
+    """Remove sessions with no messages"""
+    try:
+        await init_db()
+        engine = get_engine()
+        async with AsyncSession(engine) as session:
+            all_sessions = await session.execute(select(ChatSession))
+            sessions = all_sessions.scalars().all()
+            empty_sessions = []
+            for chat_session in sessions:
+                messages = await session.execute(
+                    select(ChatMessage).where(ChatMessage.session_id == chat_session.id)
+                )
+                if not messages.scalars().first():
+                    empty_sessions.append(chat_session.id)
+            for empty_id in empty_sessions:
+                await delete_session(empty_id)
+            logger.info(f"Cleaned up {len(empty_sessions)} empty sessions")
+    except Exception as e:
+        logger.error(f"Failed to cleanup empty sessions: {e}")
+
+async def get_database_stats():
+    """Get database statistics"""
+    try:
+        await init_db()
+        engine = get_engine()
+        async with AsyncSession(engine) as session:
+            session_count = await session.execute(select(ChatSession))
+            total_sessions = len(session_count.scalars().all())
+            message_count = await session.execute(select(ChatMessage))
+            total_messages = len(message_count.scalars().all())
+        return {
+            "total_sessions": total_sessions,
+            "total_messages": total_messages
+        }
+    except Exception as e:
+        logger.error(f"Failed to get database stats: {e}")
+        return {"total_sessions": 0, "total_messages": 0}
