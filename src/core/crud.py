@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 def get_encryption_key() -> bytes:
     """Get encryption key from environment with validation"""
     try:
-        key_b64 = os.environ.get("CHAT_DB_KEY")
+        key_b64 = st.secrets.get("CHAT_DB_KEY")
         if not key_b64:
             raise ValueError("CHAT_DB_KEY environment variable is not set")
         key = base64.urlsafe_b64decode(key_b64)
